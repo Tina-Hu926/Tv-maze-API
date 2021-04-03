@@ -6,11 +6,11 @@ from flask_restx import Resource, Api
 from flask_restx import fields
 from flask_restx import reqparse
 from flask_restx import Model
-from flask_restx import Response
+from flask import Response
 from flask import send_file
 from datetime import datetime
 import pandas as pd
-import matplotlib.pyplot as plt
+from matplotlib import pyplot as plt 
 # from  matplotlib import cm
 import time
 import logging
@@ -94,7 +94,12 @@ class ImportShow(Resource):
                     ID = ID+1
                 result = InsertTuple(data[i]["show"],ID,updating)
         if not found:
-          return {"message": "TVshow name: {} does not exist".format(name)},404
+          return {
+                    "errors": {
+                      "name": "The value '{}' is not a valid choice for 'name'.".format(name)
+                    },
+                    "message": "Input parameters validation failed"
+                  },404
         else:
             return result,201
 
@@ -126,7 +131,12 @@ class RetrieveShow(Resource):
                 "id": id
             },200
         else:
-          return {"messge":"TVshow id: {} does not exist".format(id)},404
+          return {
+                    "errors": {
+                      "id": "The value '{}' is not a valid choice for 'id'.".format(id)
+                    },
+                    "message": "Input parameters validation failed"
+                  },404
 
 ##########################################  Q4 ########################################
     @api.response(201, "Created")
@@ -143,7 +153,7 @@ class RetrieveShow(Resource):
         update_time = str(datetime.fromtimestamp(unix).strftime('%Y-%m-%d-%H:%M:%S'))
         show_exist = c.execute("SELECT Id from TVSHOWS where Id=?;",(id,)).fetchall()
         if len(show_exist):
-          c.execute("UPDATE TVSHOWS set LastUpdate = ? where Id=?;",( update_time, id))
+          c.execute("UPDATE TVSHOWS set last_update = ? where Id=?;",( update_time, id))
           i = 0
           for key, value in payload.items():
               print(key, value)
@@ -168,7 +178,12 @@ class RetrieveShow(Resource):
               }
           },201
         else:
-            return {"message": "TVshow id: {} does not exist".format(id)},404
+            return {
+                    "errors": {
+                      "id": "The value '{}' is not a valid choice for 'id'.".format(id)
+                    },
+                    "message": "Input parameters validation failed"
+                  },404
 
 
 ##########################################  Q5 ########################################
@@ -332,14 +347,19 @@ class OrderShow(Resource):
               }
             return final_result,200
         else:
-            return {"message": "invalid page number"},400
+            return {
+                    "errors": {
+                      "page": "The value '{}' is not a valid choice for 'page'.".format(page)
+                    },
+                    "message": "Input parameters validation failed"
+                  },400
         
         # print(result_list)
 
 ##########################################  Q6 ########################################
 @api.route('/tv-shows/statistics')
 @api.doc(params={'format': 'json or image'})
-@api.doc(params={'by': 'attributes of TVshow'})
+@api.doc(params={'by': 'attributes of TVshow(language,genres,status,type)'})
 class ShowStatistics(Resource):
     @api.response(200, "OK")
     @api.response(404, "Atrribute not found")
@@ -347,21 +367,26 @@ class ShowStatistics(Resource):
     def get(self):
         format = parser.parse_args().get('format')
         by = parser.parse_args().get('by')
+        valid_by = ['language','genres','status','type']
+        if by not in valid_by:
+          return {
+                  "errors": {
+                    "by": "The value '{}' is not a valid choice for 'by'.".format(by)
+                  }
+                  },400
         con = sqlite3.connect('z5234102.db')
         c = con.cursor()
-        types = []
-        res = c.execute("SELECT distinct "+by+" from TVSHOWS;").fetchall()
-        for i in range(len(res)):
-            types.append(res[i][0])
         lists = []
         update_time= []
-        res = c.execute("SELECT "+by+", lastUpdate from TVSHOWS;").fetchall()
+        res = c.execute("SELECT "+by+", last_update from TVSHOWS;").fetchall()
+        print(res)
         for i in range(len(res)):
-            lists.append(res[i][0]) 
             update_time.append(res[i][1])
-        print(update_time)
+            for j in range(len(res[i][0].split(','))):
+                print(res[i][0].split(',')[j])
+                lists.append(res[i][0].split(',')[j])
+        types =list(set(lists))
         t = time.time()
-        print(t)
         count = 0
         for str_time in update_time:
             time_stamp = time.mktime(time.strptime(str_time,'%Y-%m-%d-%H:%M:%S'))
@@ -379,56 +404,36 @@ class ShowStatistics(Resource):
                 "total-updated": count,
                 "values" : json_dic
               }
-            print(json_dic)
-            print(lists)
             con.commit()
             con.close()
-            print(by)
-            print(format)
-
             return result,200
-        else:
-            data = {}
+        elif format == "image":
+            plt.figure(figsize=(9,12))
             labels = list(pie_dic.keys())
             sizes = list(pie_dic.values())
-            print(type(labels))
-            print(sizes)
-            data["type"] = list(pie_dic.keys())
-            data["value"] = list(pie_dic.values())
-            # labels = list(pie_dic.keys())
-            # sizes = list(pie_dic.values())
-            print('data',data)
-            df = pd.DataFrame.from_dict(data)
-            df = df.set_index('type')
-            unival = df['value'].value_counts()
-            unival.plot.pie(subplots=True)
-            # plt.show()
-          # plt.figure(figsize=(6,9))
-
-          # colors = ['red','yellowgreen']
-          # explode = (0,0)
-          # patches,text1,text2 = plt.pie(sizes,
-          #             labels=labels,
-          #             explode=explode,
-          #             autopct = '%3.2f%%', 
-          #             shadow = False, 
-          #             colors=colors,
-          #             startangle =90,
-          #             pctdistance = 0.6)
-          # plt.axis('equal')
-          # plt.show()
-          # fig, ax = plt.subplots(figsize=(6,6))
-          # colors = cm.rainbow(np.arange(len(sizes))/len(sizes))
-          # ax.axis('equal')  
-          # ax.set_title(''.format(by), loc='left')
-
+            colors = ['tomato','navajowhite', 'lightskyblue', 'pink','violet', 'yellowgreen','lightgrey','sandybrown']
+            colors = colors[:len(labels)]
+            print(labels,sizes,colors)
+            explode = (0.03,)*len(labels)
+            print("explode",explode)
+            patches,l_text,p_text = plt.pie(sizes,explode=explode,labels=labels,colors=colors,
+                                            labeldistance = 1.05,autopct = '%3.1f%%',shadow = False,
+                                            startangle = 90,pctdistance = 0.6)
+            plt.axis('equal')
+            plt.title(by+' of TVshows')
+            plt.legend(loc='best')
             plt.savefig('Ass2.jpg')
-            # plt.show()
-            filename = 'Ass2.jpg'
-            # send_file(filename,mimetype='image/jpg')
-            resp = Response(filename, mimetype="image/jpeg")
-            return resp
-
+            filename = './Ass2.jpg'
+            with open(filename,'rb') as f:
+                image = f.read()
+            result = Response(image, mimetype="image/jpg")
+            return result
+        else:
+          return{
+                  "errors": {
+                    "format": "The value '{}' is not a valid choice for 'format'.".format(format)
+                  }
+                  },400
 ###########################################################
 #            self defined functions
 # InsertTuple(record,ID,updating): insert imported TV shows into database
@@ -460,38 +465,19 @@ def InsertTuple(record,ID,updating):
     summary = record["summary"]
     _links = json.dumps(record["_links"])
     rating_average = record["rating"]["average"]
-    # print("type of name:", type(tuple_type),"name", tuple_type)
-    # print("type of TVmazeId:", type(TVmazeId),"TVmazeId", TVmazeId)
-    # print("type of update_time:", type(update_time),"update_time", update_time)
-    # print("type of tuple_type:", type(tuple_type),"tuple_type", tuple_type)
-    # print("type of language:", type(language),"language", language)
-    # print("type of genres:", type(genres),"genres", genres)
-    # print("type of Status:", type(Status),"Status", Status)
-    # print("type of Runtime:", type(Runtime),"Runtime", Runtime)
-    # print("type of Premiered:", type(Premiered),"Premiered", Premiered)
-    # print("type of OfficialSite:", type(OfficialSite),"OfficialSite", OfficialSite)
-    # print("type of Schedule:", type(Schedule),"Schedule", Schedule)
-    # print("type of Rating:", type(Rating),"Rating", Rating)
-    # print("type of Weight:", type(Weight),"Weight", Weight)
-    # print("type of Network:", type(Network),"Network", Network)
-    # print("type of Summary:", type(Summary),"Summary", Summary)
-    # print("type of _Links:", type(_Links),"_Links", _Links)
-    # print("Rating_average:", type(Rating_average),"Rating_average",Rating_average)
-
-    # print(type(OfficialSite))
     if updating:
-      c.execute("UPDATE TVSHOWS SET tvmaze_Id =?, lastUpdate=? ,name=?,type=?,language=?,genres=?,status=?,runtime=?,premiered=?,officialSite=?,schedule=?,rating=?,weight=?,network=?,summary=?,_links=?,rating_average=? WHERE Id=? ", \
-        (TVmazeId, update_time, name,tuple_type,language,genres,Status,Runtime,Premiered,OfficialSite,Schedule,Rating,Weight,Network,Summary,_Links,ID,rating_average))
+      c.execute("UPDATE TVSHOWS SET tvmaze_Id =?, last_update=? ,name=?,type=?,language=?,genres=?,status=?,runtime=?,premiered=?,officialSite=?,schedule=?,rating=?,weight=?,network=?,summary=?,_links=?,rating_average=? WHERE Id=? ", \
+        (tvmaze_Id, update_time, name,tuple_type,language,genres,status,runtime,premiered,officialSite,schedule,rating,weight,network,summary,_links,ID,rating_average))
     else:
-      c.execute("INSERT INTO TVSHOWS (Id,tvmaze_Id ,lastUpdate,name,type,language,genres,status,runtime,premiered,officialSite,schedule,rating,weight,network,summary,_links,rating_average) \
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? )",(ID,Tvmaze_Id ,update_time,name,tuple_type,language,genres,Status,Runtime,Premiered,OfficialSite,Schedule,Rating,Weight,Network,Summary,_Links,rating_average))
+      c.execute("INSERT INTO TVSHOWS (Id,tvmaze_Id ,last_update,name,type,language,genres,status,runtime,premiered,officialSite,schedule,rating,weight,network,summary,_links,rating_average) \
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? )",(ID,tvmaze_Id ,update_time,name,tuple_type,language,genres,status,runtime,premiered,officialSite,schedule,rating,weight,network,summary,_links,rating_average))
     print ("Table created successfully")
     con.commit()
     con.close()
     result = { 
               "id" : ID,  
               "last-update": update_time,
-              "tvmaze-id" : TVmazeId,
+              "tvmaze-id" : tvmaze_Id,
               "_links": {
                   "self": {
                     "href": "http://{}:{}/tv-shows/{}".format(host,port_number,ID)
@@ -504,12 +490,12 @@ def Getkey(TVmazeId):
     con = sqlite3.connect('z5234102.db')
     c = con.cursor() 
     TVmazeId = str(TVmazeId)
-    cursor = c.execute("SELECT Id, TVmazeId from TVSHOWS ;")
+    cursor = c.execute("SELECT Id, tvmaze_Id from TVSHOWS ;")
     print("cursor type",type(cursor),"cursor",cursor)
     all_records = cursor.fetchall()
     print("all_records type",type(all_records),"all_records",all_records)
     if len(all_records):
-      cursor = c.execute("SELECT Id from TVSHOWS where TVmazeId=?;",(TVmazeId,))
+      cursor = c.execute("SELECT Id from TVSHOWS where tvmaze_Id=?;",(TVmazeId,))
       show_exist = cursor.fetchall()
       print("show_exist type",type(show_exist),"show_exist",show_exist)
       if len(show_exist): # show already exist in database, return Id of the show
@@ -652,7 +638,7 @@ if __name__ == '__main__':
     c.execute('''CREATE TABLE  IF NOT EXISTS TVSHOWS
         (Id INT PRIMARY KEY     NOT NULL,
         tvmaze_Id      INT,
-        lastUpdate    TEXT,
+        last_update    TEXT,
         name          TEXT,
         type          TEXT,
         language      TEXT,
