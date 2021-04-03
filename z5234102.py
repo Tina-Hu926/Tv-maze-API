@@ -11,17 +11,16 @@ from flask import send_file
 from datetime import datetime
 import pandas as pd
 from matplotlib import pyplot as plt 
-# from  matplotlib import cm
 import time
-import logging
-import ctypes
 
 app = Flask(__name__)
 api = Api(app, version='1.0', title='TV-MAZE API',
     description='A REST API build on TVMAZE API ',
 )
+
 port_number = 8000
 host = 'localhost'
+
 tv_model = api.model('TV',{'name':fields.Integer,
   'name':fields.String,
   'type':fields.String,
@@ -38,30 +37,6 @@ tv_model = api.model('TV',{'name':fields.Integer,
   'summary':fields.String 
 })
 
-# order_model = api.model('TV',{
-#     'id':fields.Integer,
-#     'name':fields.String,
-#     'runtime':fields.Integer,
-#     'premiered':fields.String,
-#     'rating-average':fields.Integer})
-# filter_model = api.model('TV',{
-#     'tvmaze_id':fields.Integer,
-#     'id':fields.Integer,
-#     'last-update':fields.String,
-#     'name':fields.String,
-#     'type': fields.String,
-#     'language':fields.String,
-#     'genres':fields.List(fields.String),
-#     'status':fields.String,
-#     'runtime':fields.Integer,
-#     'premiered':fields.String,
-#     'officialSite':fields.String,
-#     'schedule':fields.Raw,
-#     'rating':fields.Raw,
-#     'weight':fields.Integer,
-#     'network':fields.Raw,
-#     'summary':fields.String 
-# })
 parser = reqparse.RequestParser()
 parser.add_argument('name', type=str, location='args' )
 parser.add_argument('order_by',type=str, location='args' )
@@ -145,8 +120,6 @@ class RetrieveShow(Resource):
     @api.doc(body=tv_model)
     def patch(self,id):
         payload = api.payload
-        print(type(api.payload))
-        print(payload.keys)
         con = sqlite3.connect('z5234102.db')
         c=con.cursor()
         unix = int(time.time())
@@ -156,14 +129,10 @@ class RetrieveShow(Resource):
           c.execute("UPDATE TVSHOWS set last_update = ? where Id=?;",( update_time, id))
           i = 0
           for key, value in payload.items():
-              print(key, value)
               if key == 'genres':
                   value = ','.join(value)
               if key == 'schedule' or key == 'rating' or key == 'network':
                   value = json.dumps(value)
-
-              print(type(key),type(value))
-              print(i+1)
               c.execute("UPDATE TVSHOWS set "+key+" = ? where Id=?;",(value,id,))
               time.sleep(0.01)
           con.commit()
@@ -185,7 +154,6 @@ class RetrieveShow(Resource):
                     "message": "Input parameters validation failed"
                   },404
 
-
 ##########################################  Q5 ########################################
 @api.route('/tv-shows')
 @api.doc(params={'order_by': 'comma separated string value to sort the list based on the given criteria\n(+ ascending,-descending)'})
@@ -203,19 +171,12 @@ class OrderShow(Resource):
         page_size = parser.parse_args().get('page_size')
         order_range = ['id','name','runtime','premiered','rating-average']
         filter_range = ['tvmaze_id','id' ,'last-update' ,'name','type ','language' ,'genres' ,'status' ,'runtime' ,'premiered ','officialSite' ,'schedule' ,'rating ','weight' ,'network' ,'summary']
-        print(order_by)
-        print(filter)
-        print(page)
-        print(page_size)
         filter_list = []
         order_list = []
         order_dic = {}
         if filter:
-          print(type(filter.split(',')),filter.split(','))
           for filter_item in filter.split(','):
-              print(filter_item)
               if filter_item not in filter_range:
-                print("filter_item",filter_item)
                 return {
                     "errors": {
                       "filter": "The value '{}' is not a valid choice for 'filter'.".format(filter_item)
@@ -251,32 +212,21 @@ class OrderShow(Resource):
         else:
           order_list = ['id']
           order_dic['id'] = 'ASC'
-        print(order_list)
-        print(order_dic)
-        print(filter_list)
-        # order = ' '.join()
         con = sqlite3.connect('z5234102.db')
         c=con.cursor()
-        print(' '.join(filter_list))
-        print( ','.join(order_list))
         ordered = c.execute("SELECT " + ','.join(filter_list)+" from TVSHOWS ORDER BY " + ','.join(order_list)+";").fetchall()
         con.commit()
         con.close()
-        print(ordered)
         show_dic = {}
         result_list = []
         left_tuple = len(ordered)
         p = 1
         while left_tuple > page_size:
-            print("p",p)
             show_list = []
-            # print("page_size+page_size*(p-1)",page_size+page_size*(p-1))
             for i in range(page_size*(p-1),page_size+page_size*(p-1)):
-              # print("i = ",i )
               for j in range(len(filter_list)):
                   show_dic[filter_list[j]] = ordered[i][j]
               show_list.append(show_dic)
-              print(show_dic)
               show_dic = {}
             result = {
                 "page": p,
@@ -292,7 +242,6 @@ class OrderShow(Resource):
               for j in range(len(filter_list)):
                   show_dic[filter_list[j]] = ordered[i][j]
               show_list.append(show_dic)
-              print(show_dic)
               show_dic = {}
             result = {
                 "page": p,
@@ -302,50 +251,8 @@ class OrderShow(Resource):
             result_list.append(result)
         else:
             p -= 1
-        final_result = result_list[page-1]
-        print("init_final_result",final_result)
-        print("final p=",p)
-        if page > 1  and page < p:
-            print("page > 1  and page < p")
-            final_result["_links"] = {
-                "self": {
-                  "href": "http://{}:{}/tv-shows?order_by={}&page={}&page_size=1000&filter={}".format(host,port_number,order_by,page,page_size,filter)
-                },
-                "previous": {
-                  "href": "http://{}:{}/tv-shows?order_by=+id&page={}&page_size=1000&filter=id,name".format(host,port_number,order_by,page-1,page_size,filter)
-                },
-                "next": {
-                  "href": "http://{}:{}/tv-shows?order_by=+id&page={}&page_size=1000&filter=id,name".format(host,port_number,order_by,page+1,page_size,filter)
-                }
-              }
-            return final_result,200
-        elif page == 1 and p>1:
-            final_result["_links"] = {
-                "self": {
-                  "href": "http://{}:{}/tv-shows?order_by={}&page={}&page_size=1000&filter={}".format(host,host,port_number,order_by,page,page_size,filter)
-                },
-                "next": {
-                  "href": "http://{}:{}/tv-shows?order_by=+id&page={}&page_size=1000&filter=id,name".format(host,port_number,order_by,page+1,page_size,filter)
-                }
-              }
-            return final_result,200
-        elif page >1 and page == p:
-            final_result["_links"] = {
-                "self": {
-                  "href": "http://{}:{}/tv-shows?order_by={}&page={}&page_size=1000&filter={}".format(host,port_number,order_by,page,page_size,filter)
-                },
-                "previous": {
-                  "href": "http://{}:{}/tv-shows?order_by=+id&page={}&page_size=1000&filter=id,name".format(host,port_number,order_by,page-1,page_size,filter)
-                }
-              }
-            return final_result,200
-        elif page ==1 and p ==1:
-            final_result["_links"] = {
-                "self": {
-                  "href": "http://{}:{}/tv-shows?order_by={}&page={}&page_size=1000&filter={}".format(host,port_number,order_by,page,page_size,filter)
-                },
-              }
-            return final_result,200
+        if page > 0 and page <= p:
+            final_result = result_list[page-1]
         else:
             return {
                     "errors": {
@@ -353,8 +260,53 @@ class OrderShow(Resource):
                     },
                     "message": "Input parameters validation failed"
                   },400
-        
-        # print(result_list)
+        if page > 1  and page < p:
+            final_result["_links"] = {
+                "self": {
+                  "href": "http://{}:{}/tv-shows?order_by={}&page={}&page_size={}&filter={}".format(host,port_number,order_by,page,page_size,filter)
+                },
+                "previous": {
+                  "href": "http://{}:{}/tv-shows?order_by={}&page={}&page_size={}&filter={},name".format(host,port_number,order_by,page-1,page_size,filter)
+                },
+                "next": {
+                  "href": "http://{}:{}/tv-shows?order_by={}&page={}&page_size={}&filter={},name".format(host,port_number,order_by,page+1,page_size,filter)
+                }
+              }
+            return final_result,200
+        if page == 1 and p>1:
+            final_result["_links"] = {
+                "self": {
+                  "href": "http://{}:{}/tv-shows?order_by={}&page={}&page_size={}&filter={}".format(host,port_number,order_by,page,page_size,filter)
+                },
+                "next": {
+                  "href": "http://{}:{}/tv-shows?order_by={}&page={}&page_size={}&filter={}".format(host,port_number,order_by,page+1,page_size,filter)
+                }
+              }
+            return final_result,200
+        if page >1 and page == p:
+            final_result["_links"] = {
+                "self": {
+                  "href": "http://{}:{}/tv-shows?order_by={}&page={}&page_size={}&filter={}".format(host,port_number,order_by,page,page_size,filter)
+                },
+                "previous": {
+                  "href": "http://{}:{}/tv-shows?order_by={}&page={}&page_size={}&filter={},name".format(host,port_number,order_by,page-1,page_size,filter)
+                }
+              }
+            return final_result,200
+        if page ==1 and p ==1:
+            final_result["_links"] = {
+                "self": {
+                  "href": "http://{}:{}/tv-shows?order_by={}&page={}&page_size={}&filter={}".format(host,port_number,order_by,page,page_size,filter)
+                },
+              }
+            return final_result,200
+        # else:
+        #     return {
+        #             "errors": {
+        #               "page": "The value '{}' is not a valid choice for 'page'.".format(page)
+        #             },
+        #             "message": "Input parameters validation failed"
+        #           },400
 
 ##########################################  Q6 ########################################
 @api.route('/tv-shows/statistics')
@@ -379,11 +331,9 @@ class ShowStatistics(Resource):
         lists = []
         update_time= []
         res = c.execute("SELECT "+by+", last_update from TVSHOWS;").fetchall()
-        print(res)
         for i in range(len(res)):
             update_time.append(res[i][1])
             for j in range(len(res[i][0].split(','))):
-                print(res[i][0].split(',')[j])
                 lists.append(res[i][0].split(',')[j])
         types =list(set(lists))
         t = time.time()
@@ -392,7 +342,6 @@ class ShowStatistics(Resource):
             time_stamp = time.mktime(time.strptime(str_time,'%Y-%m-%d-%H:%M:%S'))
             if t - time_stamp < 172800:
               count += 1
-            print(time_stamp)
         json_dic = {}
         pie_dic = {}
         for i in range(len(types)):
@@ -413,9 +362,7 @@ class ShowStatistics(Resource):
             sizes = list(pie_dic.values())
             colors = ['tomato','navajowhite', 'lightskyblue', 'pink','violet', 'yellowgreen','lightgrey','sandybrown']
             colors = colors[:len(labels)]
-            print(labels,sizes,colors)
             explode = (0.03,)*len(labels)
-            print("explode",explode)
             patches,l_text,p_text = plt.pie(sizes,explode=explode,labels=labels,colors=colors,
                                             labeldistance = 1.05,autopct = '%3.1f%%',shadow = False,
                                             startangle = 90,pctdistance = 0.6)
@@ -444,7 +391,6 @@ class ShowStatistics(Resource):
 # DeleteRecord(ID): delete record where Id = ID
 ###########################################################
 def InsertTuple(record,ID,updating):
-    print("updating",updating)
     con = sqlite3.connect('z5234102.db')
     c=con.cursor()
     name = record["name"]
@@ -471,7 +417,6 @@ def InsertTuple(record,ID,updating):
     else:
       c.execute("INSERT INTO TVSHOWS (Id,tvmaze_Id ,last_update,name,type,language,genres,status,runtime,premiered,officialSite,schedule,rating,weight,network,summary,_links,rating_average) \
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? )",(ID,tvmaze_Id ,update_time,name,tuple_type,language,genres,status,runtime,premiered,officialSite,schedule,rating,weight,network,summary,_links,rating_average))
-    print ("Table created successfully")
     con.commit()
     con.close()
     result = { 
@@ -491,13 +436,10 @@ def Getkey(TVmazeId):
     c = con.cursor() 
     TVmazeId = str(TVmazeId)
     cursor = c.execute("SELECT Id, tvmaze_Id from TVSHOWS ;")
-    print("cursor type",type(cursor),"cursor",cursor)
     all_records = cursor.fetchall()
-    print("all_records type",type(all_records),"all_records",all_records)
     if len(all_records):
       cursor = c.execute("SELECT Id from TVSHOWS where tvmaze_Id=?;",(TVmazeId,))
       show_exist = cursor.fetchall()
-      print("show_exist type",type(show_exist),"show_exist",show_exist)
       if len(show_exist): # show already exist in database, return Id of the show
           con.commit()
           con.close()
@@ -505,7 +447,6 @@ def Getkey(TVmazeId):
       else:# show not exist in database, return the max key in database
         cursor = c.execute("SELECT max( Id ) FROM TVSHOWS;")
         ID = cursor.fetchone()[0]
-        print("ID type",type(ID),"ID",ID)
         con.commit()
         con.close()
         return False,ID
@@ -591,7 +532,6 @@ def GetPreID(ID):
   con = sqlite3.connect('z5234102.db')
   c=con.cursor()   
   while True:
-      print("pre while")
       cursor = c.execute("SELECT Id from TVSHOWS where Id=?;",(pre,))
       show_exist = cursor.fetchall()
       if len(show_exist):
@@ -599,7 +539,6 @@ def GetPreID(ID):
           con.close()
           return pre
       else:
-          print(pre)
           pre = pre-1
           if pre == 0:          
               con.commit()
@@ -613,7 +552,6 @@ def GetNextID(ID):
   c=con.cursor()   
   maxId = c.execute("SELECT max( Id ) FROM TVSHOWS;").fetchone()[0]
   while True:
-      print("next while")
       show_exist = c.execute("SELECT Id from TVSHOWS where Id=?;",(nxt,)).fetchall()
       if len(show_exist):
           con.commit()
@@ -654,10 +592,8 @@ if __name__ == '__main__':
         summary       TEXT,
         _links        TEXT,
       rating_average REAL);''')
-    print ("Table created successfully")
     con.commit()
     con.close()
-
     app.run(host = host,
         port = port_number,  
         debug = True) 
