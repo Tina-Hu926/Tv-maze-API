@@ -162,7 +162,6 @@ class RetrieveShow(Resource):
 @api.doc(params={'filter': 'attributes will be shown'})
 class OrderShow(Resource):
     @api.response(200, "OK")
-    @api.response(404, "TV-show not found")
     @api.response(400, "Bad Request")
     def get(self):
         order_by = parser.parse_args().get('order_by')
@@ -173,7 +172,7 @@ class OrderShow(Resource):
         filter_range = ['tvmaze_id','id' ,'last-update' ,'name','type ','language' ,'genres' ,'status' ,'runtime' ,'premiered ','officialSite' ,'schedule' ,'rating ','weight' ,'network' ,'summary']
         filter_list = []
         order_list = []
-        order_dic = {}
+        # order_dic = {}
         if filter:
           for filter_item in filter.split(','):
               if filter_item not in filter_range:
@@ -191,10 +190,8 @@ class OrderShow(Resource):
           for order_item in order_by.split(','):
               if order_item[0] == "+":
                   order_list.append(order_item[1:]+' ASC')
-                  # order_dic[order_item[1:]] = 'ASC'
               elif order_item[0] == "-":
                   order_list.append(order_item[1:]+' DESC')
-                  # order_dic[order_item[1:]] = 'DESC'
               else:
                   return {
                       "errors": {
@@ -211,7 +208,6 @@ class OrderShow(Resource):
                 },400
         else:
           order_list = ['id']
-          order_dic['id'] = 'ASC'
         con = sqlite3.connect('z5234102.db')
         c=con.cursor()
         ordered = c.execute("SELECT " + ','.join(filter_list)+" from TVSHOWS ORDER BY " + ','.join(order_list)+";").fetchall()
@@ -300,13 +296,6 @@ class OrderShow(Resource):
                 },
               }
             return final_result,200
-        # else:
-        #     return {
-        #             "errors": {
-        #               "page": "The value '{}' is not a valid choice for 'page'.".format(page)
-        #             },
-        #             "message": "Input parameters validation failed"
-        #           },400
 
 ##########################################  Q6 ########################################
 @api.route('/tv-shows/statistics')
@@ -314,7 +303,6 @@ class OrderShow(Resource):
 @api.doc(params={'by': 'attributes of TVshow(language,genres,status,type)'})
 class ShowStatistics(Resource):
     @api.response(200, "OK")
-    @api.response(404, "Atrribute not found")
     @api.response(400, "Bad Request")
     def get(self):
         format = parser.parse_args().get('format')
@@ -570,6 +558,9 @@ def DeleteRecord(ID):
     c.execute("DELETE from TVSHOWS where ID=?;",(ID,))
     con.commit()
     con.close()
+
+
+    
 if __name__ == '__main__':
     con = sqlite3.connect('z5234102.db')
     c=con.cursor()
